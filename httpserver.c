@@ -10,8 +10,41 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#define PORTNO 3333
+#define PORTNO 3344
 #define BUFSIZE 4096
+
+struct {
+    char* ext;
+    char* filetype;
+} extensions[] = {
+    {"gif", "image/gif"},
+    {"jpg", "image/jpeg"},
+    {"jpeg", "image/jpeg"},
+    {"png", "image/png"},
+    {"zip", "image/zip"},
+    {"gz", "image/gz"},
+    {"tar", "image/tar"},
+    {"htm", "text/html"},
+    {"html", "text/html"},
+    {"exe", "text/plain"},
+    {"cgi", "text/html"},
+    {0, 0}
+};
+
+typedef enum {
+    GIF,
+    JPG,
+    JPEG,
+    PNG,
+    ZIP,
+    GZ,
+    TAR,
+    HTM,
+    HTML,
+    EXT,
+    CGI,
+    NONE
+} FileType;
 
 void handle_sockfd(int fd) {
     int ret;
@@ -23,31 +56,83 @@ void handle_sockfd(int fd) {
         exit(1);
     }
 
+    fprintf(stdout, buf);
+    fflush(stdout);
+
+    /* insert '\0' in the end of string */
     if (ret > 0 && ret < BUFSIZE) {
         buf[ret] = '\0';    
     } else {
         buf[0] = '\0';
     }
 
-    /* printf("ret = %s\n", buf); */
-    /* fflush(stdout); */
-
+    /* replace '\r' and '\n' with '\0' */
     for (int i = 0; i < ret; i++) {
         if (buf[i] == '\r' || buf[i] == '\n') {
             buf[i] = '\0';
         }    
     }
 
-    memset(buf, 0, BUFSIZE);
-    sprintf(buf, "HTTP/1.0 200 OK\r\nContent-Type: %s\r\n\r\n", "text/html");
-    write(fd, buf, strlen(buf) + 1);
+    /* only accept GET request */
+    if (strncmp(buf, "GET ", 4) != 0 && strncmp(buf, "get ", 4) != 0) {
+        exit(1);   
+    } 
 
-    int file_fd = open("form_get.html", O_RDONLY);
-    
-    while ((ret = read(file_fd, buf, BUFSIZE)) > 0) {
-        write(fd, buf, ret);
+    /* remove the last of GET /xxx.html?xxx */
+    int i;
+    for (i = 4; i < ret; i++) {
+        if (buf[i] == ' ') {
+            buf[i] = '\0';
+            break;
+        }
     }
 
+    char* filename;
+    filename = strtok(&buf[5], buf);
+
+    /* avoid .. command */
+    for (int j = 0; j < i - 1; j++) {
+        if (buf[j] == '.' && buf[j + 1] == '.') {
+            exit(1);
+        }
+    }
+
+    FileType filetype; 
+    int buflen = strlen(buf);
+    int len;
+    /* char* filetype = (char*)0; */
+    for (int i = 0; extensions[i].ext != 0; i++) {
+        len = strlen(extensions[i].ext);
+        if (strncmp(&buf[buflen - len], extensions[i].ext, len) == 0) {
+            /* filetype = extensions[i].filetype; */
+            filetype = i;        
+            break;
+        }
+    }
+
+    char msg_buf[BUFSIZE];
+    memset(msg_buf, 0, BUFSIZE);
+    sprintf(msg_buf, "HTTP/1.0 200 OK\r\nContent-Type: %s\r\n\r\n", extensions[filetype].filetype);
+    write(fd, msg_buf, strlen(msg_buf) + 1);
+
+    memset(msg_buf, 0, BUFSIZE);
+
+    int file_fd;
+    switch (filetype) {
+        case HTML:
+            file_fd = open(&buf[5], O_RDONLY);    
+            while ((ret = read(file_fd, msg_buf, BUFSIZE)) > 0) {
+                write(fd, msg_buf, ret);
+            }
+            
+            break;
+        default:
+            break;
+    }
+
+    fprintf(stdout, "buf = %s\n", buf);
+    fprintf(stdout, "filetype = %s\n", extensions[filetype].filetype);
+    fflush(stdout);
     exit(0);
 }
 
