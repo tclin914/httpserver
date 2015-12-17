@@ -8,7 +8,12 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <fcntl.h>
+
+#define STDIN  0
+#define STDOUT 1
+#define STDERR 2
 
 #define PORTNO 3344
 #define BUFSIZE 4096
@@ -41,7 +46,7 @@ typedef enum {
     TAR,
     HTM,
     HTML,
-    EXT,
+    EXE,
     CGI,
     NONE
 } FileType;
@@ -56,8 +61,8 @@ void handle_sockfd(int fd) {
         exit(1);
     }
 
-    fprintf(stdout, buf);
-    fflush(stdout);
+    /* fprintf(stdout, buf); */
+    /* fflush(stdout); */
 
     /* insert '\0' in the end of string */
     if (ret > 0 && ret < BUFSIZE) {
@@ -87,23 +92,26 @@ void handle_sockfd(int fd) {
         }
     }
 
+    /* separate filename and get infomation */
     char* filename;
-    filename = strtok(&buf[5], buf);
+    filename = strtok(&buf[5], "?");
+    char* get;
+    get = strtok(NULL, "?");
 
     /* avoid .. command */
-    for (int j = 0; j < i - 1; j++) {
-        if (buf[j] == '.' && buf[j + 1] == '.') {
+    for (int j = 1; j < strlen(filename); j++) {
+        if (filename[j - 1] == '.' && filename[j] == '.') {
             exit(1);
         }
     }
 
     FileType filetype; 
-    int buflen = strlen(buf);
+    int fnlen = strlen(filename);
     int len;
     /* char* filetype = (char*)0; */
     for (int i = 0; extensions[i].ext != 0; i++) {
         len = strlen(extensions[i].ext);
-        if (strncmp(&buf[buflen - len], extensions[i].ext, len) == 0) {
+        if (strncmp(&filename[fnlen - len], extensions[i].ext, len) == 0) {
             /* filetype = extensions[i].filetype; */
             filetype = i;        
             break;
@@ -118,13 +126,56 @@ void handle_sockfd(int fd) {
     memset(msg_buf, 0, BUFSIZE);
 
     int file_fd;
+    char *arguments[2];
+    int pid, status;
     switch (filetype) {
+        case GIF:
+        case JPG:
+        case PNG:
+        case ZIP:
+        case GZ:
+        case TAR:
+        case HTM:
         case HTML:
-            file_fd = open(&buf[5], O_RDONLY);    
+            file_fd = open(filename, O_RDONLY);    
             while ((ret = read(file_fd, msg_buf, BUFSIZE)) > 0) {
                 write(fd, msg_buf, ret);
             }
             
+            break;
+        case EXE:
+            break;
+        case CGI:
+
+            pid = fork();
+
+            if (pid < 0) {
+                perror("ERROR on fork");
+                exit(1);
+            }
+            if (pid == 0) {
+                dup2(fd, STDOUT);
+                dup2(fd, STDERR);
+                
+                /* set environment variable */
+                setenv("QUERY_STRING", get, 1);
+                setenv("CONTENT_LENGTH", "1024", 1);
+                setenv("REQUEST_METHOD", "GET", 1);
+                setenv("SCRIPT_NAME", filename, 1);
+                setenv("REMOTE_HOST", "nplinux1.cs.nctu.edu.tw", 1);
+                setenv("REMOTE_ADDR", "140.113.168.191", 1);
+                setenv("AUTH_TYPE", "NONE", 1);
+                setenv("REMOTE_USER", "tclin", 1);
+                setenv("REMOTE_IDENT", "NONE", 1);
+
+                execl(filename, filename, NULL);
+                fprintf(stderr, "Unknown command.\n");
+                fflush(stdout);
+                exit(1);
+            } else {
+                waitpid((pid_t)pid, &status, 0);
+
+            }
             break;
         default:
             break;
@@ -132,6 +183,8 @@ void handle_sockfd(int fd) {
 
     fprintf(stdout, "buf = %s\n", buf);
     fprintf(stdout, "filetype = %s\n", extensions[filetype].filetype);
+    fprintf(stdout, "filename = %s\n", filename);
+    fprintf(stdout, "get = %s\n", get);
     fflush(stdout);
     exit(0);
 }
@@ -141,6 +194,8 @@ int main(int argc, const char *argv[])
     int sockfd, newsockfd, clilen;
     struct sockaddr_in serv_addr, cli_addr;
     int pid;
+
+    /* chdir("/u/gcs/103/0356100/public_html"); */
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
