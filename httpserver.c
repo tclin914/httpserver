@@ -181,11 +181,11 @@ void handle_sockfd(int fd) {
             break;
     }
 
-    fprintf(stdout, "buf = %s\n", buf);
-    fprintf(stdout, "filetype = %s\n", extensions[filetype].filetype);
-    fprintf(stdout, "filename = %s\n", filename);
-    fprintf(stdout, "get = %s\n", get);
-    fflush(stdout);
+    /* fprintf(stdout, "buf = %s\n", buf); */
+    /* fprintf(stdout, "filetype = %s\n", extensions[filetype].filetype); */
+    /* fprintf(stdout, "filename = %s\n", filename); */
+    /* fprintf(stdout, "get = %s\n", get); */
+    /* fflush(stdout); */
     exit(0);
 }
 
