@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <arpa/inet.h>
 
 #define STDIN  0
 #define STDOUT 1
@@ -158,7 +159,9 @@ void handle_sockfd(int fd) {
                 dup2(fd, STDERR);
                 
                 /* set environment variable */
-                setenv("QUERY_STRING", get, 1);
+                if (get != NULL) {
+                    setenv("QUERY_STRING", get, 1);
+                }
                 setenv("CONTENT_LENGTH", "1024", 1);
                 setenv("REQUEST_METHOD", "GET", 1);
                 setenv("SCRIPT_NAME", filename, 1);
@@ -221,14 +224,23 @@ int main(int argc, const char *argv[])
     listen(sockfd, 5);
     clilen = sizeof(cli_addr);
 
+    char msg_buf[1024];
+    memset(msg_buf, 0, 1024);
+
     while (1) {
         newsockfd = accept(sockfd, (struct sockaddr*)&cli_addr, &clilen);
         printf("newsockfd = %d\n", newsockfd);
+
         if (newsockfd < 0) {
             perror("ERROR on accepting");
             exit(1);
         }
 
+        /* if (strncmp(inet_ntoa(cli_addr.sin_addr), "140.113.167.", 12) != 0) { */
+            /* char* deny = "connection denied\n"; */
+            /* write(newsockfd, deny, strlen(deny) + 1); */
+        /* } else { */
+                
         pid = fork();
 
         if (pid < 0) {
@@ -241,10 +253,22 @@ int main(int argc, const char *argv[])
             dup2(newsockfd, 0);
             dup2(newsockfd, 1);
             dup2(newsockfd, 2);
-            handle_sockfd(newsockfd);
+            /* if (strncmp(inet_ntoa(cli_addr.sin_addr), "140.113.167.", 12) != 0) { */
+                /* sprintf(msg_buf, "HTTP/1.0 200 OK\r\nContent-Type: %s\r\n\r\n", "text/html"); */
+                /* printf(msg_buf); */
+                /* char* deny = "connection denied\n"; */
+                /* printf(deny); */
+                /* fflush(stdout); */
+                /* exit(0); */
+            /* } else { */
+                handle_sockfd(newsockfd);
+            /* } */
+            /* close(newsockfd); */
         } else {
             close(newsockfd);
         }
+        /* } */
+    
     }
     return 0;
 }
